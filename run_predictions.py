@@ -3,7 +3,30 @@ import numpy as np
 import json
 from PIL import Image
 
-def detect_red_light(I):
+MATCH_THRESHOLD = 0.935
+
+# I should be a 3d numpy array
+def normalize_image(I):
+    norm = np.linalg.norm(I)
+    return I / norm if norm > 0 else I
+
+def get_samples():
+
+    img1 = Image.open(os.path.join(data_path,"RL-002.jpg"))
+    # img2 = Image.open(os.path.join(data_path,"RL-010.jpg"))
+    # img3 = Image.open(os.path.join(data_path,"RL-036.jpg"))
+
+    smp1 = np.asarray(img1.crop((323, 177, 331, 195)))
+    # smp2 = np.asarray(img2.crop((321, 26, 350, 93)))
+    # smp3 = np.asarray(img3.crop((296, 163, 305, 183)))
+
+    samples = [normalize_image(smp1)]
+               # normalize_image(smp2), 
+               # normalize_image(smp3)]
+
+    return samples
+
+def detect_red_light(I, samples):
     '''
     This function takes a numpy array <I> and returns a list <bounding_boxes>.
     The list <bounding_boxes> should have one element for each red light in the 
@@ -18,17 +41,12 @@ def detect_red_light(I):
     I[:,:,2] is the blue channel
     '''
     
-    
     bounding_boxes = [] # This should be a list of lists, each of length 4. See format example below. 
-    
-    '''
-    BEGIN YOUR CODE
-    '''
     
     '''
     As an example, here's code that generates between 1 and 5 random boxes
     of fixed size and returns the results in the proper format.
-    '''
+    
     
     box_height = 8
     box_width = 6
@@ -44,7 +62,40 @@ def detect_red_light(I):
         br_col = tl_col + box_width
         
         bounding_boxes.append([tl_row,tl_col,br_row,br_col]) 
-    
+
+    BEGIN YOUR CODE
+    '''
+    img_height, img_width, _ = I.shape
+
+    smp_heights = []
+    smp_widths = []
+
+    for smp in samples:
+        smp_height, smp_width, _ = smp.shape
+        smp_heights.append(smp_height)
+        smp_widths.append(smp_width)
+
+    min_smp_height = min(smp_heights)
+    min_smp_width = min(smp_widths)
+
+    added = False
+    for i in range(img_height - min_smp_height + 1):
+        for j in range(img_width - min_smp_width + 1):
+
+            for smp in samples:
+                smp_height, smp_width, _ = smp.shape
+                if i + smp_height >= img_height or j + smp_width >= img_width:
+                   continue
+
+                img_crop = I[i:i+smp_height, j:j+smp_width, :]
+                img_crop = normalize_image(img_crop)
+                score = np.sum(img_crop * smp)
+                if score > MATCH_THRESHOLD:
+                    bounding_boxes.append([i, j, i+smp_height, j+smp_width])
+                    i += smp_height
+                    j += smp_width
+                    break
+
     '''
     END YOUR CODE
     '''
@@ -67,8 +118,11 @@ file_names = sorted(os.listdir(data_path))
 # remove any non-JPEG files: 
 file_names = [f for f in file_names if '.jpg' in f] 
 
+samples = get_samples()
+
 preds = {}
 for i in range(len(file_names)):
+    print("Image " + str(i+1) + "...")
     
     # read image using PIL:
     I = Image.open(os.path.join(data_path,file_names[i]))
@@ -76,7 +130,7 @@ for i in range(len(file_names)):
     # convert to numpy array:
     I = np.asarray(I)
     
-    preds[file_names[i]] = detect_red_light(I)
+    preds[file_names[i]] = detect_red_light(I, samples)
 
 # save preds (overwrites any previous predictions!)
 with open(os.path.join(preds_path,'preds.json'),'w') as f:
